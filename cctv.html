@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CCTV</title>
+  <style>
+    img {
+      width: 250px;
+      cursor: pointer;
+    }
+    #cctv-hls {
+      width: 50%;
+      height: auto;
+    }
+    button {
+      padding: 10px;
+      margin: 10px;
+      width: 200px;
+    }
+  </style>
+</head>
+<body>
+  <center>
+    <video id="cctv-hls" controls></video>
+    <div>
+      <button id="refreshBTN">refresh</button>
+    </div>
+    <div id="cctv-streams"></div>
+  </center>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <script>
+    (async () => {
+      const video = document.getElementById('cctv-hls');
+      const hls = new Hls();
+      let hlsInstance;
+      
+      async function loadStream(src) {
+        if (Hls.isSupported()) {
+          if (hlsInstance) {
+            hlsInstance.destroy();
+          }
+          hlsInstance = new Hls();
+          hlsInstance.loadSource(src);
+          hlsInstance.attachMedia(video);
+          hlsInstance.on(Hls.Events.MANIFEST_PARSED, function() {
+            video.play();
+            video.volume = 0.20;
+          });
+        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+          video.src = src;
+          video.addEventListener('loadedmetadata', function() {
+            video.play();
+            video.volume = 0.20;
+          });
+        }
+      }
+
+      const streams = await (await fetch("http://localhost:4444/streams")).json()
+      const streamsCount = streams.length;
+      const streamsContainer = document.getElementById('cctv-streams');
+      
+      function refreshImages() {
+        document.querySelectorAll('.thumbnail').forEach(img => {
+          const url = img.src.split('?')[0];
+          img.src = `${url}?t=${new Date().getTime()}`;
+        });
+      }
+
+      for (let i = 0; i < streamsCount; i++) {
+        const img = document.createElement('img');
+        img.src = `http://localhost:4444/room/${i}?t=${new Date().getTime()}`;
+        img.alt = `CCTV Stream ${i}`;
+        img.className = `thumbnail`;
+        img.addEventListener('click', () => {
+          loadStream(streams[i]);
+        });
+        streamsContainer.appendChild(img);
+      }
+
+      document.getElementById("refreshBTN").addEventListener('click', refreshImages);
+
+      // Load the first stream by default
+      loadStream(streams[0]);
+
+      // Refresh images every 10 seconds
+      setInterval(refreshImages, 20000);
+    })();
+  </script>
+</body>
+</html>
