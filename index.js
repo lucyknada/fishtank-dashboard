@@ -5,11 +5,12 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const { Jimp } = require("jimp");
-
+const Motion = require('motion-detect').Motion;
+const decode = require('im-decode');
 app.use(cors());
 
 const streams = [
-  // "https://ft-hetzner.flowstreams.cx/9b249j7qlqu0fypg/index.m3u8",
+  "https://ft-hetzner.flowstreams.cx/9b249j7qlqu0fypg/index.m3u8",
   "https://ft-hetzner.flowstreams.cx/d678xcnkn2slngkx/index.m3u8",
   "https://ft-hetzner.flowstreams.cx/8e1arf44e86qa7ru/index.m3u8",
   "https://ft-hetzner.flowstreams.cx/9f41r40060icglir/index.m3u8",
@@ -35,8 +36,9 @@ const streams = [
   "https://ft-hetzner.flowstreams.cx/21aflvcz5puavd2e/index.m3u8"
 ];
 
-app.get('/room/:number', (req, res) => {
+app.get('/room/:number', async (req, res) => {
   const { number } = req.params;
+
   if (!Number.isInteger(parseInt(number))) {
     return res.status(400).send({ error: 'The requested number is not a number.' });
   }
@@ -51,24 +53,28 @@ app.get('/room/:number', (req, res) => {
       size: "240x128"
     })
     .on('end', async () => {
-      const { PNG } = await import('pngjs')
-      const pixelmatch = await import('pixelmatch')
-      let returnTemp = false;
-      if (fs.existsSync(outputPath)) {
-        const img1 = PNG.sync.read(fs.readFileSync(outputPath));
-        const img2 = PNG.sync.read(fs.readFileSync(tempOutputPath));
-        const { width, height } = img1;
-        const diff = new PNG({ width, height });
-        const numDiffPixels = pixelmatch.default(img1.data, img2.data, diff.data, width, height, { threshold: 0.4 });
-        if (numDiffPixels == 0) {
+      const motion = new Motion();
+      const decoded_input = await new Promise((resolve) => {
+        decode(fs.readFileSync(outputPath), function (err, rgbaArray) {
+          resolve(rgbaArray)
+        });
+      })
+      const decoded_temp = await new Promise((resolve) => {
+        decode(fs.readFileSync(tempOutputPath), function (err, rgbaArray) {
+          resolve(rgbaArray)
+        });
+      })
+      if (!motion.detect(decoded_input, decoded_temp)) {
+        try {
           const image = await Jimp.read(tempOutputPath);
+          fs.renameSync(tempOutputPath, outputPath);
           await image.greyscale().brightness(0.2).write(tempOutputPath);
-          returnTemp = true;
+        } catch (err) {
+          console.log(err)
         }
-      } else {
-        fs.renameSync(tempOutputPath, outputPath);
       }
-      res.sendFile(returnTemp ? tempOutputPath : outputPath, (err) => { });
+
+      res.sendFile(tempOutputPath, (err) => { });
     })
     .on('error', (err) => {
       console.error('Error generating thumbnail:', err);
