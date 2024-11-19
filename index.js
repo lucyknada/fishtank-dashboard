@@ -67,7 +67,6 @@ app.get('/room/:number', async (req, res) => {
         })
 
         const motion_detected = motion.detect(decoded_input, decoded_temp);
-        console.log(motion_detected, number)
         if (!motion_detected) {
           try {
             const image = await Jimp.read(tempOutputPath);
